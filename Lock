@@ -1,24 +1,3 @@
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-
-local Window = Rayfield:CreateWindow({
-	Name = "FOV Lock Panel",
-	Icon = "target",
-	LoadingTitle = "FOV Lock",
-	LoadingSubtitle = "Rayfield UI",
-	ShowText = "Rayfield",
-	Theme = "Default",
-	ToggleUIKeybind = "K",
-
-	ConfigurationSaving = {
-		Enabled = true,
-		FolderName = "FOVLock",
-		FileName = "Config"
-	}
-})
-
-local MainTab = Window:CreateTab("FOV", "crosshair")
-MainTab:CreateSection("Configurações")
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -29,8 +8,6 @@ local camera = workspace.CurrentCamera
 
 local fovradius = 80
 local distancemax = 100
-local strokeThickness = 2
-local strokeTransparency = 0
 
 local enabled = true
 local constantMode = false
@@ -49,8 +26,7 @@ circle.Visible = false
 circle.Parent = gui
 
 local stroke = Instance.new("UIStroke")
-stroke.Thickness = strokeThickness
-stroke.Transparency = strokeTransparency
+stroke.Thickness = 0.5
 stroke.Color = Color3.fromRGB(255, 255, 255)
 stroke.Parent = circle
 
@@ -61,11 +37,13 @@ corner.Parent = circle
 local function hasToolEquipped()
 	local char = player.Character
 	if not char then return false end
+
 	for _, item in ipairs(char:GetChildren()) do
 		if item:IsA("Tool") then
 			return true
 		end
 	end
+
 	return false
 end
 
@@ -74,20 +52,32 @@ local function isValidTarget(char)
 	local hrp = char:FindFirstChild("HumanoidRootPart")
 	local humanoid = char:FindFirstChildOfClass("Humanoid")
 
-	if not (head and hrp and humanoid) then return nil end
-	if humanoid.Health <= 0 then return nil end
+	if not (head and hrp and humanoid) then
+		return nil
+	end
+
+	if humanoid.Health <= 0 then
+		return nil
+	end
 
 	return head, hrp
 end
 
 local function isTargetAlive(target)
-	if not target or not target.Parent then return false end
-	local humanoid = target.Parent:FindFirstChildOfClass("Humanoid")
-	return humanoid and humanoid.Health > 0
+	if not target then return false end
+	local char = target.Parent
+	if not char then return false end
+
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return false end
+
+	return humanoid.Health > 0
 end
 
 local function getTargetInCircle()
-	if not hasToolEquipped() then return nil end
+	if not hasToolEquipped() then
+		return nil
+	end
 
 	local closest
 	local shortest = fovradius
@@ -102,9 +92,11 @@ local function getTargetInCircle()
 			if head then
 				local worldDist = (hrp.Position - myHRP.Position).Magnitude
 				if worldDist <= distancemax then
-					local pos, onScreen = camera:WorldToViewportPoint(head.Position)
+					local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
 					if onScreen then
-						local dist = (Vector2.new(mouse.X, mouse.Y) - Vector2.new(pos.X, pos.Y)).Magnitude
+						local dist = (Vector2.new(mouse.X, mouse.Y)
+							- Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+
 						if dist < shortest then
 							shortest = dist
 							closest = head
@@ -114,31 +106,38 @@ local function getTargetInCircle()
 			end
 		end
 	end
-    
+
 	return closest
 end
 
-RunService:BindToRenderStep("HardCameraLock", Enum.RenderPriority.Camera.Value + 1, function()
-	if enabled and constantMode then
-		if not hasToolEquipped() then
-			lockedTarget = nil
-			return
-		end
+RunService:BindToRenderStep(
+	"HardCameraLock",
+	Enum.RenderPriority.Camera.Value + 1,
+	function()
+		if enabled and constantMode then
+			if not hasToolEquipped() then
+				lockedTarget = nil
+				return
+			end
 
-		if not lockedTarget then
-			lockedTarget = getTargetInCircle()
-		end
+			if not lockedTarget then
+				lockedTarget = getTargetInCircle()
+			end
 
-		if lockedTarget and not isTargetAlive(lockedTarget) then
-			lockedTarget = nil
-			return
-		end
+			if lockedTarget and not isTargetAlive(lockedTarget) then
+				lockedTarget = nil
+				return
+			end
 
-		if lockedTarget then
-			camera.CFrame = CFrame.new(camera.CFrame.Position, lockedTarget.Position)
+			if lockedTarget and lockedTarget.Parent then
+				camera.CFrame = CFrame.new(
+					camera.CFrame.Position,
+					lockedTarget.Position
+				)
+			end
 		end
 	end
-end)
+)
 
 UserInputService.InputBegan:Connect(function(input, gp)
 	if gp then return end
@@ -148,6 +147,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
 		constantMode = false
 		lockedTarget = nil
 		circle.Visible = false
+		return
 	end
 
 	if input.UserInputType == Enum.UserInputType.MouseButton2 and enabled then
@@ -170,54 +170,3 @@ RunService.RenderStepped:Connect(function()
 		circle.Position = UDim2.fromOffset(mouse.X, mouse.Y)
 	end
 end)
-
-MainTab:CreateSlider({
-	Name = "Tamanho do FOV",
-	Range = {20, 300},
-	Increment = 1,
-	CurrentValue = fovradius,
-	Callback = function(v)
-		fovradius = v
-		circle.Size = UDim2.fromOffset(v * 2, v * 2)
-	end
-})
-
-MainTab:CreateSlider({
-	Name = "Distância Máxima",
-	Range = {20, 500},
-	Increment = 5,
-	CurrentValue = distancemax,
-	Callback = function(v)
-		distancemax = v
-	end
-})
-
-MainTab:CreateSlider({
-	Name = "Stroke Thickness",
-	Range = {1, 10},
-	Increment = 0.5,
-	CurrentValue = strokeThickness,
-	Callback = function(v)
-		strokeThickness = v
-		stroke.Thickness = v
-	end
-})
-
-MainTab:CreateSlider({
-	Name = "Stroke Transparency",
-	Range = {0, 1},
-	Increment = 0.05,
-	CurrentValue = strokeTransparency,
-	Callback = function(v)
-		strokeTransparency = v
-		stroke.Transparency = v
-	end
-})
-
-MainTab:CreateToggle({
-	Name = "Mostrar FOV",
-	CurrentValue = true,
-	Callback = function(v)
-		circle.Visible = v
-	end
-})
